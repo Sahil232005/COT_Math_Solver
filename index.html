@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🧠 Chain-of-Thought Solver</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <style>
+    .glass {
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    body.light {
+      background: linear-gradient(to bottom right, #477472, #faf6f6);
+      color: #263238;
+    }
+    body.light .glass {
+      background: rgba(255, 255, 255, 0.6);
+      color: #263238;
+    }
+    body {
+      background: linear-gradient(to bottom right, #0f172a, #1e293b);
+      color: #f8fafc;
+    }
+  </style>
+</head>
+<body class="min-h-screen p-6 font-sans">
+  <div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex justify-between items-center">
+      <h1 class="text-4xl font-bold text-blue-300 animate__animated animate__fadeInLeft">🧠 CoT Solver</h1>
+      <div class="space-x-3">
+        <button onclick="toggleModal('aboutModal')" class="hover:underline text-sm text-blue-200">About</button>
+        <button onclick="toggleModal('helpModal')" class="hover:underline text-sm text-blue-200">Help</button>
+        <button id="themeToggle" class="hover:underline text-sm text-blue-200">🌗 Day / Night</button>
+        <a href="#" onclick="login()" class="hover:underline text-sm text-lime-400">Login</a>
+<a href="#" onclick="logout()" class="hover:underline text-sm text-red-400">Logout</a>
+
+      </div>
+    </div>
+
+    <h2 class="text-xl text-blue-200">Welcome, <span class="font-semibold">{{ user }}</span> 👋</h2>
+
+    <div class="p-6 rounded-2xl glass shadow-xl">
+      <form id="solveForm" class="space-y-4">
+        <textarea id="problem" name="problem" rows="3" class="w-full bg-transparent border border-blue-400 p-4 rounded-lg placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400" placeholder="Type a logical or math problem here..."></textarea>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold transition">
+          🔍 Solve Problem
+        </button>
+      </form>
+    </div>
+
+    <div id="loader" class="hidden mt-4 text-center text-blue-300">🤖 Thinking...</div>
+
+    <div id="chatBox" class="space-y-4 mt-6"></div>
+
+    <div>
+      <div class="flex justify-between items-center">
+        <h2 class="text-2xl font-bold text-blue-200">🧾 History</h2>
+        <button onclick="clearHistory()" class="text-sm text-red-400 hover:underline">Clear</button>
+      </div>
+      <div id="historyBox" class="mt-2 space-y-2 max-h-60 overflow-y-auto text-sm"></div>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50">
+    <div class="bg-white text-black p-6 rounded-xl w-full max-w-md">
+      <h2 class="text-xl font-bold text-blue-600 mb-2">📘 About</h2>
+      <p>This Chain-of-Thought Solver was built by <strong>Sahil Bhanushali</strong> using FastAPI, Groq LLaMA3, and TailwindCSS. It solves math and logic step-by-step with explainable reasoning.</p>
+      <div class="text-right mt-4"><button onclick="toggleModal('aboutModal')" class="text-blue-600 hover:underline">Close</button></div>
+    </div>
+  </div>
+
+  <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50">
+    <div class="bg-white text-black p-6 rounded-xl w-full max-w-md">
+      <h2 class="text-xl font-bold text-green-600 mb-2">🆘 Help</h2>
+      <ul class="list-disc pl-5 text-sm text-gray-700">
+        <li>Type a math/logic puzzle</li>
+        <li>Click “Solve” to get step-by-step reasoning</li>
+        <li>Use theme toggle 🌗</li>
+        <li>Check history below</li>
+      </ul>
+      <div class="text-right mt-4"><button onclick="toggleModal('helpModal')" class="text-green-600 hover:underline">Close</button></div>
+    </div>
+  </div>
+
+<script>
+  feather.replace();
+
+  function toggleModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.toggle("hidden");
+    modal.classList.toggle("flex");
+  }
+
+  // 🌗 Theme toggle
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    document.body.classList.toggle("light");
+    const mode = document.body.classList.contains("light") ? "light" : "dark";
+    localStorage.setItem("theme", mode);
+  });
+
+  if (localStorage.getItem("theme") === "light") {
+    document.body.classList.add("light");
+  }
+
+  const form = document.getElementById("solveForm");
+  const loader = document.getElementById("loader");
+  const chatBox = document.getElementById("chatBox");
+  const historyBox = document.getElementById("historyBox");
+
+  // 🧠 Solver form submit
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const problem = document.getElementById("problem").value.trim();
+    if (!problem) return;
+
+    loader.classList.remove("hidden");
+
+    const userBubble = document.createElement("div");
+    userBubble.className = "bg-blue-100 text-blue-900 p-3 rounded-xl w-fit max-w-xl";
+    userBubble.innerHTML = `<strong>You:</strong> ${problem}`;
+    chatBox.appendChild(userBubble);
+
+    try {
+      const res = await fetch("/solve", {
+        method: "POST",
+        body: new URLSearchParams({ problem }),
+      });
+      const data = await res.json();
+      loader.classList.add("hidden");
+
+      if (data.result) {
+        const cotBubble = document.createElement("div");
+        cotBubble.className = "bg-emerald-100 text-emerald-900 p-3 rounded-xl w-fit max-w-xl ml-auto";
+        cotBubble.innerHTML = `<strong>CoT Solver:</strong><br>${data.result}`;
+        chatBox.appendChild(cotBubble);
+        addToHistory(problem, data.result);
+      } else {
+        alert("⚠️ No result from server");
+      }
+    } catch (err) {
+      loader.innerText = `⚠️ ${err.message}`;
+    }
+  });
+
+  function addToHistory(q, a) {
+    const div = document.createElement("div");
+    div.className = "bg-blue-100 text-blue-800 p-3 rounded-lg";
+    div.innerHTML = `<p><strong>Q:</strong> ${q}</p><p><strong>A:</strong> ${a}</p>`;
+    historyBox.prepend(div);
+  }
+
+  function clearHistory() {
+    historyBox.innerHTML = "";
+  }
+
+  // ✅ Login/Logout
+  async function login() {
+    const res = await fetch("/login", { method: "POST" });
+    if (res.ok) window.location.reload();
+    else alert("Login failed");
+  }
+
+  async function logout() {
+    const res = await fetch("/logout", { method: "POST" });
+    if (res.ok) window.location.reload();
+    else alert("Logout failed");
+  }
+</script>
+
+
+</body>
+</html>
